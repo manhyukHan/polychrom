@@ -42,6 +42,7 @@ import numpy as np
 import pandas as pd
 
 from scipy.spatial import ckdtree
+from scipy.ndimage import gaussian_filter1d
 
 try:
     from . import _polymer_math
@@ -117,7 +118,7 @@ def smart_contacts(data, cutoff=1.7, min_cutoff=2.1, percent_func=lambda x: 1 / 
 
     if cutoff > min_cutoff:
         frac = percent_func(cutoff)
-        inds = np.nonzero(np.random.random(len(data)) < frac)[0]
+        inds = np.nonzero(np.random.random(len(data)) < frac)[0]    # np.ndarray(ind1, ind2, ind3, ...)
 
         conts = calculate_contacts(data[inds], cutoff)
         conts[:, 0] = inds[conts[:, 0]]
