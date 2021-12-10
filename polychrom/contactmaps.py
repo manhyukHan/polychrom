@@ -56,6 +56,7 @@ from contextlib import closing
 from . import polymerutils
 import warnings
 from . import polymer_analyses
+from cooltools.lib import systemutils
 
 
 def indexing(smaller, larger, M):
@@ -112,6 +113,10 @@ def init(*args):
     contactBlock__ = args[-2]
     N__ = args[-1]
 
+def defaultContactProcessing(x):
+    return x
+
+
 
 def chunk(mylist, chunksize):
     """
@@ -149,9 +154,9 @@ def simple_worker(x, uniqueContacts):
             if contacts is None:
                 continue
             contacts = np.asarray(contacts)
-            assert len(contacts.shape) == 2
+            assert len(contacts.shape) == 2     # assert 2D
             if contacts.shape[1] != 2:
-                raise ValueError("Contacts.shape[1] must be 2. Exiting.")
+                raise ValueError("Contacts.shape[1] must be 2. Exiting.")   # k x 2 array
             contacts = contactProcessing__(contacts)
             ctrue = indexing(contacts[:, 0], contacts[:, 1], N__)
             if not uniqueContacts:
@@ -382,7 +387,7 @@ def averageContacts(contactIterator, inValues, N, **kwargs):
     useFmap = kwargs.get("useFmap", False)
     classInitArgs = kwargs.get("classInitArgs", [])
     classInitKwargs = kwargs.get("classInitKwargs", {})
-    contactProcessing = kwargs.get("contactProcessing", lambda x: x)
+    contactProcessing = kwargs.get("contactProcessing", defaultContactProcessing)
     finalSize = N * (N + 1) // 2
     boundaries = np.linspace(0, finalSize, bucketNum + 1, dtype=int)
     chunks = zip(boundaries[:-1], boundaries[1:])
@@ -410,7 +415,7 @@ def averageContacts(contactIterator, inValues, N, **kwargs):
         if callable(useFmap):
             fmap = useFmap
         else:
-            from mirnylib.systemutils import fmap
+            from systemutils import fmap
         fmap(worker, inValues, nproc=nproc)
 
     res = np.concatenate([tonumpyarray(i) for i in sharedArrays])
@@ -459,7 +464,7 @@ class filenameContactMap(object):
             raise StopIteration
         try:
             data = self.loadFunction(self.filenames[self.i])
-        except tuple(self.exceptionsToIgnore):
+        except ValueError: #tuple(self.exceptionsToIgnore):
             print("contactmap manager could not load file", self.filenames[self.i])
             self.i += 1
             return None
@@ -523,9 +528,6 @@ def binnedContactMap(
             UserWarning("very large contact map" " may be difficult to visualize")
         )
 
-    chromosomeStarts = np.cumsum(chainBinNums)
-    chromosomeStarts = np.hstack((0, chromosomeStarts))
-
     def contactAction(contacts, myBins=[bins]):
         contacts = np.asarray(contacts, order="C")
         cshape = contacts.shape
@@ -533,6 +535,9 @@ def binnedContactMap(
         contacts = np.searchsorted(myBins[0], contacts) - 1
         contacts.shape = cshape
         return contacts
+
+    chromosomeStarts = np.cumsum(chainBinNums)
+    chromosomeStarts = np.hstack((0, chromosomeStarts))
 
     args = [cutoff, loadFunction, exceptionsToIgnore, contactFinder]
     values = [filenames[i::n] for i in range(n)]
@@ -601,7 +606,7 @@ class filenameContactMapRepeat(object):
             start = self.curStarts.pop()
             data = self.data[start : start + self.mapN]
             assert len(data) == self.mapN
-        except tuple(self.exceptionsToIgnore):
+        except ValueError: #tuple(self.exceptionsToIgnore):
             print("contactmap manager could not load file", self.filenames[self.i])
             self.i += 1
             return None
@@ -621,7 +626,7 @@ def monomerResolutionContactMapSubchains(
     useFmap=False,
 ):
     args = [mapStarts, mapN, cutoff, loadFunction, exceptionsToIgnore, method]
-    values = [filenames[i::n] for i in range(n)]
+    values = [filenames[i::n] for i in range(n)]        # multiprocessing
     return averageContacts(
         filenameContactMapRepeat,
         values,
@@ -629,5 +634,5 @@ def monomerResolutionContactMapSubchains(
         classInitArgs=args,
         useFmap=useFmap,
         uniqueContacts=True,
-        nproc=n,
+        nproc=n
     )

@@ -90,8 +90,8 @@ import warnings
 
 from collections.abc import Iterable
 
-import simtk.openmm as openmm
-import simtk.unit
+import openmm
+import openmm.unit
 
 from . import forces
 
@@ -261,6 +261,7 @@ class Simulation(object):
 
         if platform.lower() == "opencl":
             platform_object = openmm.Platform.getPlatformByName("OpenCL")
+            #platform_object = openmm.Platform.getPlatform(2)
         elif platform.lower() == "reference":
             platform_object = openmm.Platform.getPlatformByName("Reference")
         elif platform.lower() == "cuda":
@@ -273,7 +274,7 @@ class Simulation(object):
 
         self.temperature = kwargs["temperature"]
 
-        self.collisionRate = kwargs["collision_rate"] * (1 / simtk.unit.picosecond)
+        self.collisionRate = kwargs["collision_rate"] * (1 / openmm.unit.picosecond)
 
         self.integrator_type = kwargs["integrator"]
         if isinstance(self.integrator_type, str):
@@ -281,24 +282,24 @@ class Simulation(object):
             if self.integrator_type.lower() == "langevin":
                 self.integrator = openmm.LangevinIntegrator(
                     self.temperature,
-                    kwargs["collision_rate"] * (1 / simtk.unit.picosecond),
-                    kwargs["timestep"] * simtk.unit.femtosecond,
+                    kwargs["collision_rate"] * (1 / openmm.unit.picosecond),
+                    kwargs["timestep"] * openmm.unit.femtosecond,
                 )
             elif self.integrator_type.lower() == "variablelangevin":
                 self.integrator = openmm.VariableLangevinIntegrator(
                     self.temperature,
-                    kwargs["collision_rate"] * (1 / simtk.unit.picosecond),
+                    kwargs["collision_rate"] * (1 / openmm.unit.picosecond),
                     kwargs["error_tol"],
                 )
             elif self.integrator_type.lower() == "langevinmiddle":
                 self.integrator = openmm.LangevinMiddleIntegrator(
                     self.temperature,
-                    kwargs["collision_rate"] * (1 / simtk.unit.picosecond),
-                    kwargs["timestep"] * simtk.unit.femtosecond,
+                    kwargs["collision_rate"] * (1 / openmm.unit.picosecond),
+                    kwargs["timestep"] * openmm.unit.femtosecond,
                 )
             elif self.integrator_type.lower() == "verlet":
                 self.integrator = openmm.VariableVerletIntegrator(
-                    kwargs["timestep"] * simtk.unit.femtosecond
+                    kwargs["timestep"] * openmm.unit.femtosecond
                 )
             elif self.integrator_type.lower() == "variableverlet":
                 self.integrator = openmm.VariableVerletIntegrator(kwargs["error_tol"])
@@ -306,8 +307,8 @@ class Simulation(object):
             elif self.integrator_type.lower() == "brownian":
                 self.integrator = openmm.BrownianIntegrator(
                     self.temperature,
-                    kwargs["collision_rate"] * (1 / simtk.unit.picosecond),
-                    kwargs["timestep"] * simtk.unit.femtosecond,
+                    kwargs["collision_rate"] * (1 / openmm.unit.picosecond),
+                    kwargs["timestep"] * openmm.unit.femtosecond,
                 )
         else:
             logging.info("Using the provided integrator object")
@@ -327,25 +328,25 @@ class Simulation(object):
         self.block = 0
         self.time = 0
 
-        self.nm = simtk.unit.nanometer
+        self.nm = openmm.unit.nanometer
 
-        self.kB = simtk.unit.BOLTZMANN_CONSTANT_kB * simtk.unit.AVOGADRO_CONSTANT_NA
-        self.kT = self.kB * self.temperature * simtk.unit.kelvin  # thermal energy
+        self.kB = openmm.unit.BOLTZMANN_CONSTANT_kB * openmm.unit.AVOGADRO_CONSTANT_NA
+        self.kT = self.kB * self.temperature * openmm.unit.kelvin  # thermal energy
 
         # All masses are the same,
         # unless individual mass multipliers are specified in self.load()
-        self.conlen = 1.0 * simtk.unit.nanometer * self.length_scale
+        self.conlen = 1.0 * openmm.unit.nanometer * self.length_scale
 
         self.kbondScalingFactor = float(
             (2 * self.kT / self.conlen ** 2)
-            / (simtk.unit.kilojoule_per_mole / simtk.unit.nanometer ** 2)
+            / (openmm.unit.kilojoule_per_mole / openmm.unit.nanometer ** 2)
         )
 
         self.system = openmm.System()
 
         # adding PBC
         self.PBC = False
-        if kwargs["PBCbox"]:
+        if kwargs["PBCbox"] is not False:
             self.PBC = True
             PBCbox = np.array(kwargs["PBCbox"])
             self.system.setDefaultPeriodicBoxVectors(
@@ -363,7 +364,7 @@ class Simulation(object):
 
     def get_data(self):
         "Returns an Nx3 array of positions"
-        return np.asarray(self.data / simtk.unit.nanometer, dtype=np.float32)
+        return np.asarray(self.data / openmm.unit.nanometer, dtype=np.float32)
 
     def get_scaled_data(self):
         """Returns data, scaled back to PBC box """
@@ -421,7 +422,7 @@ class Simulation(object):
             minvalue = np.min(data, axis=0)
             data -= minvalue
 
-        self.data = simtk.unit.Quantity(data, simtk.unit.nanometer)
+        self.data = openmm.unit.Quantity(data, openmm.unit.nanometer)
         if report:
             for reporter in self.reporters:
                 reporter.report(
@@ -695,17 +696,17 @@ class Simulation(object):
 
         b = time.time()
         coords = self.state.getPositions(asNumpy=True)
-        newcoords = coords / simtk.unit.nanometer
+        newcoords = coords / openmm.unit.nanometer
         newcoords = np.array(newcoords, dtype=np.float32)
         if self.kwargs["save_decimals"] is not False:
             newcoords = np.round(newcoords, self.kwargs["save_decimals"])
 
-        self.time = self.state.getTime() / simtk.unit.picosecond
+        self.time = self.state.getTime() / openmm.unit.picosecond
 
         # calculate energies in KT/particle
         eK = self.state.getKineticEnergy() / self.N / self.kT
         eP = self.state.getPotentialEnergy() / self.N / self.kT
-        curtime = self.state.getTime() / simtk.unit.picosecond
+        curtime = self.state.getTime() / openmm.unit.picosecond
 
         msg = "block %4s " % int(self.block)
         msg += "pos[1]=[%.1lf %.1lf %.1lf] " % tuple(newcoords[0])
@@ -727,7 +728,7 @@ class Simulation(object):
         dif = np.sqrt(np.mean(np.sum((newcoords - self.get_data()) ** 2, axis=1)))
         msg += "dr=%.2lf " % (dif,)
         self.data = coords
-        msg += "t=%2.1lfps " % (self.state.getTime() / simtk.unit.picosecond)
+        msg += "t=%2.1lfps " % (self.state.getTime() / openmm.unit.picosecond)
         msg += "kin=%.2lf pot=%.2lf " % (eK, eP)
         msg += "Rg=%.3lf " % self.RG()
         msg += "SPS=%.0lf " % (steps / (float(b - a)))
@@ -737,10 +738,10 @@ class Simulation(object):
             or self.integrator_type.lower() == "variableverlet"
         ):
             dt = self.integrator.getStepSize()
-            msg += "dt=%.1lffs " % (dt / simtk.unit.femtosecond)
+            msg += "dt=%.1lffs " % (dt / openmm.unit.femtosecond)
             mass = self.system.getParticleMass(1)
-            dx = simtk.unit.sqrt(2.0 * eK * self.kT / mass) * dt
-            msg += "dx=%.2lfpm " % (dx / simtk.unit.nanometer * 1000.0)
+            dx = openmm.unit.sqrt(2.0 * eK * self.kT / mass) * dt
+            msg += "dx=%.2lfpm " % (dx / openmm.unit.nanometer * 1000.0)
 
         logging.info(msg)
 
@@ -753,7 +754,7 @@ class Simulation(object):
         }
         if get_velocities:
             result["vel"] = self.state.getVelocities() / (
-                simtk.unit.nanometer / simtk.unit.picosecond
+                openmm.unit.nanometer / openmm.unit.picosecond
             )
         result.update(save_extras)
         if save:
@@ -774,12 +775,12 @@ class Simulation(object):
         )
 
         eP = state.getPotentialEnergy()
-        pos = np.array(state.getPositions() / simtk.unit.nanometer)
+        pos = np.array(state.getPositions() / openmm.unit.nanometer)
         bonds = np.sqrt(np.sum(np.diff(pos, axis=0) ** 2, axis=1))
         sbonds = np.sort(bonds)
         vel = state.getVelocities()
         mass = self.system.getParticleMass(1)
-        vkT = np.array(vel / simtk.unit.sqrt(self.kT / mass), dtype=float)
+        vkT = np.array(vel / openmm.unit.sqrt(self.kT / mass), dtype=float)
         self.velocs = vkT
         EkPerParticle = 0.5 * np.sum(vkT ** 2, axis=1)
 
@@ -868,10 +869,14 @@ class Simulation(object):
         rascript = tempfile.NamedTemporaryFile()
         # writing the rasmol script. Spacefill controls radius of the sphere.
         rascript.write(
-            b"""wireframe off
-        color temperature
-        spacefill 100
-        background white
+            b"""display depthcue off
+        display rendermode GLSL
+        mol modselect 0 0 resname POL
+        mol modstyle 0 0 Points 1.0
+        mol modmaterial 0 0 BrushedMetal
+        mol modcolor 0 0 Beta
+        mol scaleminmax 0 0 -225 225
+        color Display Background black
         """
         )
         rascript.flush()
@@ -893,21 +898,29 @@ class Simulation(object):
         newData[-1, 3] = colors[-1]
 
         towrite = tempfile.NamedTemporaryFile()
-        towrite.write(("{:d}\n\n".format(int(len(newData))).encode("utf-8")))
+        #towrite.write(("{:d}\n\n".format(int(len(newData))).encode("utf-8")))
 
         # number of atoms and a blank line after is a requirement of rasmol
+        j = 0
         for i in newData:
+            j += 1
+            i[0] = round(i[0],2)
+            i[1] = round(i[1],2)
+            i[2] = round(i[2],2)
             towrite.write(
                 (
-                    "CA\t{:f}\t{:f}\t{:f}\t{:d}\n".format(i[0], i[1], i[2], int(i[3]))
+                    f"{'ATOM'.ljust(6)}{str(j).rjust(5)} {'H'.rjust(4)}{'POL'.rjust(4)} X{'1'.rjust(4)}    {str(i[0]).rjust(8)}{str(i[1]).rjust(8)}{str(i[2]).rjust(8)}{'1.00'.rjust(6)}{str(int(i[3])).rjust(6)}\n"
+                    #"CA\t{:f}\t{:f}\t{:f}\t{:d}\n".format(i[0], i[1], i[2], int(i[3]))
                 ).encode("utf-8")
             )
+
+        towrite.write(("TER\nEND").encode("utf-8"))
 
         towrite.flush()
         "TODO: rewrite using subprocess.popen"
 
         if os.name == "posix":  # if linux
-            os.system("rasmol -xyz %s -script %s" % (towrite.name, rascript.name))
+            os.system("vmd -m %s -e %s" % (towrite.name, rascript.name))
         else:  # if windows
             os.system(
                 "C:/RasWin/raswin.exe -xyz %s -script %s"
